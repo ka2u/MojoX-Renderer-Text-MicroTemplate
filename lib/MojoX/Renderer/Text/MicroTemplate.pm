@@ -1,6 +1,7 @@
 package MojoX::Renderer::Text::MicroTemplate;
 
 use strict;
+
 use warnings;
 our $VERSION = '0.01';
 
@@ -8,40 +9,46 @@ use Text::MicroTemplate::File;
 use File::Spec;
 
 sub build_handler {
-    my $class   = shift;
-    my $mojo    = shift;
-    my $handler = shift || 'epl';
+    my $class    = shift;
+    my $mojo     = shift;
+    my $handler  = shift || 'epl';
     my $io_layer = shift || 'utf8';
-    $io_layer = ':encoding('.$io_layer.')';
+    $io_layer = ':encoding(' . $io_layer . ')';
     $mojo->renderer->add_handler(
         $handler => sub {
-            my ( $self, $c, $output ) = @_;
+            my ($r, $c, $output, $options) = @_;
 
-            my $fullpath = $c->stash->{template_path};
-            $self->{_mt_cache} ||= {};
-            my $mt = $self->{_mt_cache}->{$fullpath};
+            my $file = $r->template_name($options);
+            my $path = $r->root;
 
-	    my @paths = File::Spec->splitpath($fullpath);
-	    my $file = pop @paths;
-	    my $path = File::Spec->catdir(@paths);
+            unless (-r $path) {
+                $c->app->log->error(
+                    "Template $path missing or not readable.");
+                return;
+            }
+            $r->{_mt_cache} ||= {};
+            my $mt = $r->{_mt_cache}->{$path};
+
+
             unless ($mt) {
-                $mt = $self->{_mt_cache}->{$fullpath}
-                    = Text::MicroTemplate::File->new(
-			include_path => [$path],
-		    );
-		$mt->{open_layer} = $io_layer;
+                $mt = $r->{_mt_cache}->{$path}
+                  = Text::MicroTemplate::File->new(include_path => [$path],);
+                $mt->{open_layer} = $io_layer;
                 $mt->{line_start} = '%';
                 $mt->{tag_start}  = '<%';
                 $mt->{tag_end}    = '%>';
             }
-            ${$output} = ${ $mt->render_file( $file, $c ) };
+
+            ${$output} = ${$mt->render_file($file, $c)};
+            return ${$output};
         }
     );
 }
 
 
-
 1;
+
+
 __END__
 
 =head1 NAME
